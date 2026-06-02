@@ -1,0 +1,13 @@
+*** Using Compiler 'V5.06 update 7 (build 960)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
+Build target 'Romote_Controler'
+compiling e28.c...
+..\Hardware\E28\e28.h(9): warning:  #1-D: last line of file ends without a newline
+  #endif
+..\Hardware\E28\e28.c(84): warning:  #1-D: last line of file ends without a newline
+  }
+..\Hardware\E28\e28.c: 2 warnings, 0 errors
+linking...
+Program Size: Code=13116 RO-data=544 RW-data=68 ZI-data=5372  
+FromELF: creating hex file...
+"Romote_Controler\Romote_Controler.axf" - 0 Error(s), 2 Warning(s).
+Build Time Elapsed:  00:00:04
