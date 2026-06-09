@@ -54,25 +54,27 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
     if ((HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_15) == GPIO_PIN_SET) &&
         (huart6.gState == HAL_UART_STATE_READY))
     {
-        /* ---- 1. 将 kfs[4][3]（每元素 0~3，2 bit）打包为 uint32_t ---- */
+        /* ---- 1. 将 kfs[4][3] 打包为 uint32_t ----
+         * 屏幕上报: 1=空, 2=R1, 3=R2, 4=假 → 减1后存入 0,1,2,3 (各2 bit) */
         uint32_t kfs_packed = 0;
         for (uint8_t i = 0; i < 4; i++)
         {
             for (uint8_t j = 0; j < 3; j++)
             {
                 /* kfs[i][j] 放到 bit[2*(i*3+j)+1 : 2*(i*3+j)] */
-                kfs_packed |= ((uint32_t)(kfs_val[i][j] & 0x03)) << (2 * (i * 3 + j));
+                kfs_packed |= ((uint32_t)((kfs_val[i][j] - 1) & 0x03)) << (2 * (i * 3 + j));
             }
         }
 
-        /* ---- 2. 将 kfs_put[2][3]（每元素 0~1，1 bit）打包为 uint8_t ---- */
+        /* ---- 2. 将 kfs_put[2][3] 打包为 uint8_t ----
+         * 屏幕上报: 1=不放, 2=放 → 减1后存入 0,1 (各1 bit) */
         uint8_t kfs_put_packed = 0;
         for (uint8_t i = 0; i < 2; i++)
         {
             for (uint8_t j = 0; j < 3; j++)
             {
                 /* kfs_put[i][j] 放到 bit[i*3+j] */
-                kfs_put_packed |= ((kfs_put_val[i][j] & 0x01)) << (i * 3 + j);
+                kfs_put_packed |= ((uint8_t)((kfs_put_val[i][j] - 1) & 0x01)) << (i * 3 + j);
             }
         }
 

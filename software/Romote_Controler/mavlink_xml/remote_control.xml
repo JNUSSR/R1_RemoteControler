@@ -55,7 +55,7 @@
                  bit[23:22] = kfs[3][2]
                  bit[31:24] = 保留未使用
             -->
-            <field type="uint32_t" name="kfs">梅林KFS按键矩阵4x3，每元素2位（值0~3），共24位有效（bit0~bit23），bit24~31保留</field>
+            <field type="uint32_t" name="kfs">梅林KFS按键矩阵4x3，每元素2位。屏幕上报1=空/2=R1/3=R2/4=假，固件减1后打包为0/1/2/3，共24位有效（bit0~bit23）</field>
 
             <!-- kfs_put[2][3]: R2九宫格矩阵 2行3列，每元素 0~1（1 bit），共 6 bit，存入 uint8_t
                  bit[0] = kfs_put[0][0]
@@ -66,7 +66,7 @@
                  bit[5] = kfs_put[1][2]
                  bit[7:6] = 保留未使用
             -->
-            <field type="uint8_t" name="kfs_put">R2九宫格按键矩阵2x3，每元素1位（值0~1），共6位有效（bit0~bit5），bit6~7保留</field>
+            <field type="uint8_t" name="kfs_put">R2九宫格按键矩阵2x3，每元素1位。屏幕上报1=不放/2=放，固件减1后打包为0/1，共6位有效（bit0~bit5）</field>
         </message>
     </messages>
 </mavlink>
