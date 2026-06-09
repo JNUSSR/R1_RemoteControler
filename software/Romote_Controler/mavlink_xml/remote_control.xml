@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<mavlink>
+    <version>3</version>
+    <dialect>0</dialect>
+
+    <messages>
+        <!--
+            REMOTE_CONTROL_STATE (id=150)
+            R1 遥控器完整状态上报。
+            payload 大小: 1 + 8 + 8 + 1 + 4 + 1 = 23 字节
+        -->
+        <message id="150" name="REMOTE_CONTROL_STATE">
+            <description>R1遥控器状态数据：编码器值、摇杆移动量、动作指令、梅林KFS矩阵、R2九宫格矩阵、模式拨码</description>
+
+            <!-- mode: 4 路拨码开关，bit0=mode[0], bit1=mode[1], bit2=mode[2], bit3=mode[3] -->
+            <field type="uint8_t" name="mode">4路模式拨码开关状态（bit0~bit3 对应 mode[0]~mode[3]，1=高电平/未拨下，0=低电平/拨下）</field>
+
+            <!-- encoder[4]: 4 路编码器累积位置 -->
+            <field type="int16_t" name="encoder_0">编码器0旋转位置值</field>
+            <field type="int16_t" name="encoder_1">编码器1旋转位置值</field>
+            <field type="int16_t" name="encoder_2">编码器2旋转位置值</field>
+            <field type="int16_t" name="encoder_3">编码器3旋转位置值</field>
+
+            <!-- move[4]: 4 路摇杆/移动量 -->
+            <field type="int16_t" name="move_0">摇杆通道0移动量</field>
+            <field type="int16_t" name="move_1">摇杆通道1移动量</field>
+            <field type="int16_t" name="move_2">摇杆通道2移动量</field>
+            <field type="int16_t" name="move_3">摇杆通道3移动量</field>
+
+            <!-- act: 屏幕下发的动作字节 -->
+            <field type="uint8_t" name="act">屏幕触发的动作指令字节</field>
+
+            <!-- kfs[4][3]: 梅林矩阵 4行3列，每元素 0~3（2 bit），共 24 bit，存入 uint32_t
+                 bit[ 1: 0] = kfs[0][0]
+                 bit[ 3: 2] = kfs[0][1]
+                 bit[ 5: 4] = kfs[0][2]
+                 bit[ 7: 6] = kfs[1][0]
+                 bit[ 9: 8] = kfs[1][1]
+                 bit[11:10] = kfs[1][2]
+                 bit[13:12] = kfs[2][0]
+                 bit[15:14] = kfs[2][1]
+                 bit[17:16] = kfs[2][2]
+                 bit[19:18] = kfs[3][0]
+                 bit[21:20] = kfs[3][1]
+                 bit[23:22] = kfs[3][2]
+                 bit[31:24] = 保留未使用
+            -->
+            <field type="uint32_t" name="kfs">梅林KFS按键矩阵4x3，每元素2位（值0~3），共24位有效（bit0~bit23），bit24~31保留</field>
+
+            <!-- kfs_put[2][3]: R2九宫格矩阵 2行3列，每元素 0~1（1 bit），共 6 bit，存入 uint8_t
+                 bit[0] = kfs_put[0][0]
+                 bit[1] = kfs_put[0][1]
+                 bit[2] = kfs_put[0][2]
+                 bit[3] = kfs_put[1][0]
+                 bit[4] = kfs_put[1][1]
+                 bit[5] = kfs_put[1][2]
+                 bit[7:6] = 保留未使用
+            -->
+            <field type="uint8_t" name="kfs_put">R2九宫格按键矩阵2x3，每元素1位（值0~1），共6位有效（bit0~bit5），bit6~7保留</field>
+        </message>
+    </messages>
+</mavlink>

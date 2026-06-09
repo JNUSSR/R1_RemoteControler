@@ -80,6 +80,18 @@ int fputc(int ch, FILE *f)
     HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
     return ch;
 }
+
+/**
+ * 功能说明：GCC/newlib/picolibc 的 printf 重定向底层函数。
+ *          printf → _write() → __io_putchar() 这条链最终到达这里。
+ *          与 fputc 不同的是，fputc 仅对 Keil/MDK 工具链有效，
+ *          GCC 工具链必须实现 __io_putchar。
+ */
+int __io_putchar(int ch)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
+    return ch;
+}
 /* USER CODE END 0 */
 
 /**
@@ -156,8 +168,9 @@ int main(void)
 }
 
 /**
- * 功能说明：配置系统时钟（HSE + PLL，设置各总线分频与 Flash 延迟）
- */
+  * @brief System Clock Configuration
+  * @retval None
+  */
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -204,8 +217,9 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
- * 功能说明：系统发生严重错误时进入此函数（默认禁用中断并无限循环）
- */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
@@ -216,14 +230,14 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
- * 功能说明：assert_param 失败时被调用，用于调试定位
- * 参数：
- *  - file: 断言失败的源文件名
- *  - line: 断言失败的源文件行号
- */
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */

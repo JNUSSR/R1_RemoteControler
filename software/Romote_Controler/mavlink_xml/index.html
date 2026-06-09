@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R1 遥控器 · MAVLink 状态监视器</title>
+<style>
+  :root {
+    --bg: #0f1923;
+    --panel: #172432;
+    --border: #233a50;
+    --text: #d0dae5;
+    --text-secondary: #7b8ea3;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56,189,248,0.15);
+    --danger: #f87171;
+    --success: #4ade80;
+    --warn: #fbbf24;
+    --radius: 8px;
+    --gap: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  /* ---- layout ---- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--gap);
+    margin-bottom: 16px;
+  }
+  .topbar-left { display:flex; align-items:center; gap:10px; }
+  .badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 100px;
+    background: var(--accent-glow);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .dot {
+    display: inline-block; width:8px; height:8px; border-radius:50%;
+    background: var(--text-secondary);
+  }
+  .dot.on { background: var(--success); box-shadow:0 0 6px var(--success); }
+  .dot.off { background: var(--danger); }
+  /* buttons */
+  button {
+    font-family: inherit; font-size: 0.82rem;
+    padding: 7px 18px; border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  button:hover { border-color: var(--accent); color:#fff; }
+  button.primary { background: var(--accent); color:#000; border-color:var(--accent); font-weight:600; }
+  button.primary:hover { background:#7dd3fc; }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.danger:hover { background:var(--danger); color:#000; }
+  /* ---- grid ---- */
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: var(--gap); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+  }
+  .panel.full { grid-column: 1 / -1; }
+  /* row inside panels */
+  .row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+  .row .label { color: var(--text-secondary); font-size:0.8rem; }
+  .row .value { font-weight:600; font-variant-numeric: tabular-nums; font-family:'Cascadia Code','JetBrains Mono','Consolas',monospace; }
+  /* mode bits */
+  .mode-bits { display:flex; gap:6px; }
+  .mode-bit {
+    width: 32px; height: 32px;
+    border-radius: 4px;
+    background: #1e3247;
+    display: flex; align-items: center; justify-content: center;
+    font-size:0.7rem; font-weight:700;
+  }
+  .mode-bit.active { background: var(--accent); color:#000; }
+  /* KFS grid */
+  .kfs-grid {
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .kfs-cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size:0.75rem; font-weight:700;
+    background: #1e3247;
+    transition: background 0.15s;
+  }
+  .kfs-cell.v1 { background: #0e4b2e; }
+  .kfs-cell.v2 { background: #5c4b0e; }
+  .kfs-cell.v3 { background: #7c2d12; }
+  .kfs-put-grid {
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .kfs-put-cell {
+    aspect-ratio: 1;
+    border-radius: 3px;
+    background: #1e3247;
+    display: flex; align-items: center; justify-content: center;
+    font-size:0.7rem; font-weight:700;
+  }
+  .kfs-put-cell.on { background: var(--accent); color:#000; }
+  /* encoder */
+  .encoder-bar-wrap { background:#1e3247; border-radius:4px; height:8px; margin-top:2px; overflow:hidden; }
+  .encoder-bar { height:100%; background:var(--accent); border-radius:4px; transition:width 0.1s; }
+  /* act */
+  .act-display {
+    font-size:2rem; font-weight:700; text-align:center;
+    padding:8px; border-radius:var(--radius);
+    background:#1e3247;
+  }
+  /* log */
+  .log {
+    height: 120px;
+    overflow-y: auto;
+    background: #0b1520;
+    border-radius: var(--radius);
+    padding: 8px;
+    font-family: 'Cascadia Code','JetBrains Mono','Consolas',monospace;
+    font-size: 0.7rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+  .log .err { color: var(--danger); }
+  .log .ok { color: var(--success); }
+  .log .info { color: var(--accent); }
+  /* stats */
+  .stat-num { font-size:1.3rem; font-weight:700; color:var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ====== TOP BAR ====== -->
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>🎮 R1 遥控器 <span class="badge">MAVLink v2</span></h1>
+    <span class="dot" id="connDot" title="串口状态"></span>
+    <span id="connLabel" style="font-size:0.8rem;color:var(--text-secondary);">未连接</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <button class="primary" id="btnConnect" onclick="connectSerial()">🔌 连接串口</button>
+    <button class="danger" id="btnDisconnect" onclick="disconnectSerial()" style="display:none;">⏻ 断开</button>
+    <button onclick="clearLog()">🗑 清空日志</button>
+    <select id="baudrate" style="background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-family:inherit;">
+      <option value="115200">115200</option>
+      <option value="57600">57600</option>
+      <option value="38400">38400</option>
+      <option value="9600">9600</option>
+    </select>
+  </div>
+</div>
+
+<!-- ====== DASHBOARD ====== -->
+<div class="grid">
+
+  <!-- 模式开关 -->
+  <div class="panel">
+    <h2>🔘 模式拨码 MODE</h2>
+    <div class="mode-bits">
+      <div class="mode-bit" id="mode0">M0</div>
+      <div class="mode-bit" id="mode1">M1</div>
+      <div class="mode-bit" id="mode2">M2</div>
+      <div class="mode-bit" id="mode3">M3</div>
+    </div>
+    <div style="font-size:0.7rem;color:var(--text-secondary);margin-top:6px;">
+      Raw: <span id="modeRaw" style="font-family:monospace;">0x00</span>
+    </div>
+  </div>
+
+  <!-- 动作 -->
+  <div class="panel">
+    <h2>⚡ 动作 ACT</h2>
+    <div class="act-display" id="actVal">0x00</div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="panel">
+    <h2>📊 接收统计</h2>
+    <div class="row"><span class="label">总消息数</span> <span class="stat-num" id="statTotal">0</span></div>
+    <div class="row"><span class="label">REMOTE_CONTROL_STATE</span> <span class="stat-num" id="statRC">0</span></div>
+    <div class="row"><span class="label">CRC 错误</span> <span id="statCrc" style="color:var(--danger);">0</span></div>
+    <div class="row"><span class="label">帧同步丢失</span> <span id="statLost" style="color:var(--warn);">0</span></div>
+  </div>
+
+  <!-- 编码器 -->
+  <div class="panel full">
+    <h2>🔄 编码器 ENCODERS</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap);">
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Enc 0</span>
+        <div style="font-weight:700;font-family:monospace;" id="enc0">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="encBar0" style="width:50%"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Enc 1</span>
+        <div style="font-weight:700;font-family:monospace;" id="enc1">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="encBar1" style="width:50%"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Enc 2</span>
+        <div style="font-weight:700;font-family:monospace;" id="enc2">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="encBar2" style="width:50%"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Enc 3</span>
+        <div style="font-weight:700;font-family:monospace;" id="enc3">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="encBar3" style="width:50%"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 摇杆 -->
+  <div class="panel full">
+    <h2>🕹 摇杆 MOVE (x4)</h2>
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap);">
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Ch 0</span>
+        <div style="font-weight:700;font-family:monospace;" id="move0">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="moveBar0" style="width:50%;background:var(--success);"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Ch 1</span>
+        <div style="font-weight:700;font-family:monospace;" id="move1">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="moveBar1" style="width:50%;background:var(--success);"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Ch 2</span>
+        <div style="font-weight:700;font-family:monospace;" id="move2">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="moveBar2" style="width:50%;background:var(--success);"></div></div>
+      </div>
+      <div>
+        <span style="font-size:0.75rem;color:var(--text-secondary);">Ch 3</span>
+        <div style="font-weight:700;font-family:monospace;" id="move3">0</div>
+        <div class="encoder-bar-wrap"><div class="encoder-bar" id="moveBar3" style="width:50%;background:var(--success);"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KFS 梅林矩阵 -->
+  <div class="panel">
+    <h2>🎹 KFS 梅林矩阵 (4×3)</h2>
+    <div id="kfsGrid" class="kfs-grid" style="grid-template-columns:repeat(3,1fr);">
+      <!-- filled by JS -->
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;font-size:0.65rem;color:var(--text-secondary);">
+      <span>■0</span><span style="color:#4ade80;">■1</span><span style="color:#fbbf24;">■2</span><span style="color:#f87171;">■3</span>
+    </div>
+  </div>
+
+  <!-- KFS_PUT R2九宫格 -->
+  <div class="panel">
+    <h2>🎛 KFS_PUT 九宫格 (2×3)</h2>
+    <div id="kfsPutGrid" class="kfs-put-grid" style="grid-template-columns:repeat(3,1fr);">
+      <!-- filled by JS -->
+    </div>
+    <div style="display:flex;gap:8px;margin-top:6px;font-size:0.65rem;color:var(--text-secondary);">
+      <span style="color:var(--text-secondary);">■0</span><span style="color:var(--accent);">■1</span>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="panel full">
+    <h2>📜 日志</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+//  MAVLink v2 常量
+// =====================================================================
+const MAVLINK_STX = 0xFD;
+
+// REMOTE_CONTROL_STATE message definition (from remote_control.xml)
+const MSG_ID_REMOTE_CONTROL_STATE = 150;
+const MSG_LEN_REMOTE_CONTROL_STATE = 23;
+const MSG_CRC_EXTRA_REMOTE_CONTROL_STATE = 150;
+
+// MAVLink v2 header bytes (excluding STX): LEN, INCOMPAT, COMPAT, SEQ, SYSID, COMPID, MSGID[3]
+const MAVLINK_V2_HEADER_LEN = 9;
+
+// =====================================================================
+//  CRC-16/MCRF4XX (MAVLink standard)
+// =====================================================================
+function crc16_mcrf4xx(data, start, len) {
+  let crc = 0xFFFF;
+  for (let i = start; i < start + len; i++) {
+    let tmp = data[i] ^ (crc & 0xFF);
+    tmp ^= (tmp << 4);
+    crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4);
+  }
+  return crc & 0xFFFF;
+}
+
+function crc16_accumulate_byte(crc, byte) {
+  let tmp = (byte & 0xFF) ^ (crc & 0xFF);
+  tmp ^= (tmp << 4);
+  return ((crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)) & 0xFFFF;
+}
+
+// =====================================================================
+//  全局状态
+// =====================================================================
+let port = null;
+let reader = null;
+let readerClosedPromise = null;
+let keepReading = false;
+
+// 接收缓冲区
+let rxBuf = new Uint8Array(4096);
+let rxIdx = 0;
+
+// MAVLink 解析状态机
+const STATE_IDLE = 0;
+const STATE_GOT_STX = 1;
+let parseState = STATE_IDLE;
+let msgLen = 0;
+let msgIncompat = 0;
+let msgCompat = 0;
+let msgSeq = 0;
+let msgSysid = 0;
+let msgCompid = 0;
+let msgMsgid = 0;
+
+// 统计
+let statTotal = 0;
+let statRC = 0;
+let statCrcErr = 0;
+let statLost = 0;
+
+// =====================================================================
+//  DOM 引用
+// =====================================================================
+const $ = id => document.getElementById(id);
+
+// =====================================================================
+//  日志
+// =====================================================================
+function log(msg, cls = '') {
+  const el = $('log');
+  const time = new Date().toLocaleTimeString();
+  el.innerHTML += `<span class="${cls}">[${time}] ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// =====================================================================
+//  串口连接
+// =====================================================================
+async function connectSerial() {
+  try {
+    port = await navigator.serial.requestPort();
+    const baud = parseInt($('baudrate').value) || 115200;
+    await port.open({ baudRate: baud, dataBits: 8, stopBits: 1, parity: 'none' });
+    keepReading = true;
+    $('btnConnect').style.display = 'none';
+    $('btnDisconnect').style.display = '';
+    $('connDot').className = 'dot on';
+    $('connLabel').textContent = `已连接 @ ${baud}`;
+    log(`串口已连接 @ ${baud} baud`, 'ok');
+    readLoop();
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      log(`连接失败: ${err.message}`, 'err');
+    }
+  }
+}
+
+async function disconnectSerial() {
+  keepReading = false;
+  if (reader) {
+    await reader.cancel().catch(() => {});
+    reader = null;
+  }
+  if (port) {
+    await port.close().catch(() => {});
+    port = null;
+  }
+  $('btnConnect').style.display = '';
+  $('btnDisconnect').style.display = 'none';
+  $('connDot').className = 'dot off';
+  $('connLabel').textContent = '已断开';
+  parseState = STATE_IDLE;
+  rxIdx = 0;
+  log('串口已断开', 'info');
+}
+
+async function readLoop() {
+  while (port && port.readable && keepReading) {
+    try {
+      reader = port.readable.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) processBytes(value);
+      }
+    } catch (err) {
+      if (keepReading) log(`读取错误: ${err.message}`, 'err');
+    } finally {
+      if (reader) {
+        try { reader.releaseLock(); } catch(e) {}
+        reader = null;
+      }
+    }
+    // 短暂等待后重试
+    if (keepReading) await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+// =====================================================================
+//  字节处理 — 状态机解析 MAVLink v2 帧
+// =====================================================================
+function processBytes(data) {
+  for (let i = 0; i < data.length; i++) {
+    const b = data[i];
+
+    switch (parseState) {
+      case STATE_IDLE:
+        if (b === MAVLINK_STX) {
+          // 找到帧头，开始接收帧
+          rxBuf[0] = b;
+          rxIdx = 1;
+          parseState = STATE_GOT_STX;
+        }
+        break;
+
+      case STATE_GOT_STX:
+        rxBuf[rxIdx++] = b;
+
+        // 当收到足够字节来读取头部时，提取长度
+        if (rxIdx === 2) {
+          msgLen = b;  // LEN field
+        }
+
+        // 完整帧: STX(1) + HEADER(9) + PAYLOAD(msgLen) + CHECKSUM(2) = 12 + msgLen
+        // 签名不处理（假定无签名）
+        const totalLen = 1 + MAVLINK_V2_HEADER_LEN + msgLen + 2;
+
+        if (rxIdx >= totalLen) {
+          // 收到完整帧，解析
+          parseMavlinkFrame(rxBuf.slice(0, totalLen));
+          parseState = STATE_IDLE;
+          rxIdx = 0;
+        }
+        break;
+    }
+  }
+}
+
+function parseMavlinkFrame(frame) {
+  const len = frame[1];
+  const incompat = frame[2];
+  const compat = frame[3];
+  const seq = frame[4];
+  const sysid = frame[5];
+  const compid = frame[6];
+  // MSGID is 3 bytes, little-endian (byte 7,8,9)
+  const msgid = frame[7] | (frame[8] << 8) | (frame[9] << 16);
+
+  const payloadStart = 10;
+  const payloadEnd = payloadStart + len;
+  const checksumPos = payloadEnd;
+
+  // 收到消息但签名位若置位则跳过（+13 字节签名）
+  if (incompat & 0x01) {
+    // 有签名，暂不处理
+    log(`收到带签名的消息 msgid=${msgid}，暂不支持签名，跳过`, 'err');
+    statLost++;
+    return;
+  }
+
+  // ---- 验证 CRC ----
+  // CRC over bytes 1..(checksumPos-1) + crc_extra
+  let crc = 0xFFFF;
+  for (let i = 1; i < checksumPos; i++) {
+    crc = crc16_accumulate_byte(crc, frame[i]);
+  }
+
+  // crc_extra depends on msgid
+  let crcExtra = 0;
+  if (msgid === MSG_ID_REMOTE_CONTROL_STATE) {
+    crcExtra = MSG_CRC_EXTRA_REMOTE_CONTROL_STATE;
+  } else {
+    // Unknown message — we can't verify CRC without crc_extra,
+    // but we can still try: most common crc_extra is the msgid itself
+    crcExtra = msgid & 0xFF;
+  }
+
+  crc = crc16_accumulate_byte(crc, crcExtra);
+
+  const receivedCrc = frame[checksumPos] | (frame[checksumPos + 1] << 8);
+
+  if (crc !== receivedCrc) {
+    statCrcErr++;
+    // 只在前10个CRC错误时记录日志
+    if (statCrcErr <= 10) {
+      log(`CRC 错误: msgid=${msgid} calc=0x${crc.toString(16)} recv=0x${receivedCrc.toString(16)}`, 'err');
+    }
+    return;
+  }
+
+  statTotal++;
+
+  // ---- 分发消息 ----
+  if (msgid === MSG_ID_REMOTE_CONTROL_STATE) {
+    handleRemoteControlState(frame, payloadStart, len);
+  } else {
+    // 只在前5个非目标消息时记录
+    if (statTotal - statRC <= 5) {
+      log(`收到其他 MAVLink 消息: msgid=${msgid} len=${len}`, 'info');
+    }
+  }
+}
+
+// =====================================================================
+//  解析 REMOTE_CONTROL_STATE 消息 (msgid=150)
+//  payload 布局 (23 bytes, little-endian):
+//    offset  0: kfs       uint32_t
+//    offset  4: encoder_0 int16_t
+//    offset  6: encoder_1 int16_t
+//    offset  8: encoder_2 int16_t
+//    offset 10: encoder_3 int16_t
+//    offset 12: move_0    int16_t
+//    offset 14: move_1    int16_t
+//    offset 16: move_2    int16_t
+//    offset 18: move_3    int16_t
+//    offset 20: mode      uint8_t
+//    offset 21: act       uint8_t
+//    offset 22: kfs_put   uint8_t
+// =====================================================================
+function handleRemoteControlState(frame, payloadStart, len) {
+  statRC++;
+  const p = frame; // use frame directly, offset payloadStart
+
+  const readU8  = (off) => p[payloadStart + off];
+  const readI16 = (off) => {
+    const lo = p[payloadStart + off];
+    const hi = p[payloadStart + off + 1];
+    // little-endian signed int16
+    const val = lo | (hi << 8);
+    return val > 32767 ? val - 65536 : val;
+  };
+  const readU32 = (off) => {
+    return p[payloadStart + off] | (p[payloadStart + off + 1] << 8) |
+           (p[payloadStart + off + 2] << 16) | (p[payloadStart + off + 3] << 24);
+  };
+
+  const kfs       = readU32(0);
+  const encoder_0 = readI16(4);
+  const encoder_1 = readI16(6);
+  const encoder_2 = readI16(8);
+  const encoder_3 = readI16(10);
+  const move_0    = readI16(12);
+  const move_1    = readI16(14);
+  const move_2    = readI16(16);
+  const move_3    = readI16(18);
+  const mode      = readU8(20);
+  const act       = readU8(21);
+  const kfs_put   = readU8(22);
+
+  // ---- 更新 UI ----
+  // Mode
+  for (let i = 0; i < 4; i++) {
+    const bit = (mode >> i) & 1;
+    const el = $(`mode${i}`);
+    el.className = 'mode-bit' + (bit ? '' : ' active');
+    // 原始硬件: mode[i]==0 表示拨下(active), mode[i]==1 表示未拨下
+    // bit 值为 GPIO 读值 (0=低电平/拨下, 1=高电平/未拨下)
+    el.textContent = `M${i}`;
+  }
+  $('modeRaw').textContent = '0x' + mode.toString(16).padStart(2, '0').toUpperCase();
+
+  // Act
+  $('actVal').textContent = '0x' + act.toString(16).padStart(2, '0').toUpperCase();
+
+  // Encoders
+  const encoderMax = 2048; // 假设最大范围用于进度条
+  for (let i = 0; i < 4; i++) {
+    const val = [encoder_0, encoder_1, encoder_2, encoder_3][i];
+    $(`enc${i}`).textContent = val;
+    const pct = Math.max(0, Math.min(100, ((val + encoderMax) / (2 * encoderMax)) * 100));
+    $(`encBar${i}`).style.width = pct.toFixed(1) + '%';
+  }
+
+  // Move
+  const moveMax = 2048;
+  for (let i = 0; i < 4; i++) {
+    const val = [move_0, move_1, move_2, move_3][i];
+    $(`move${i}`).textContent = val;
+    const pct = Math.max(0, Math.min(100, ((val + moveMax) / (2 * moveMax)) * 100));
+    $(`moveBar${i}`).style.width = pct.toFixed(1) + '%';
+  }
+
+  // KFS 矩阵 (4x3) unpack from uint32_t
+  buildKfsGrid(kfs);
+  // KFS_PUT 矩阵 (2x3) unpack from uint8_t
+  buildKfsPutGrid(kfs_put);
+
+  // 统计
+  $('statTotal').textContent = statTotal;
+  $('statRC').textContent = statRC;
+  $('statCrc').textContent = statCrcErr;
+  $('statLost').textContent = statLost;
+}
+
+// =====================================================================
+//  KFS 4x3 矩阵渲染 (每元素 2 bit, 0~3)
+// =====================================================================
+function buildKfsGrid(kfs) {
+  const container = $('kfsGrid');
+  container.innerHTML = '';
+  // Row 0: bit[5:0], Row 1: bit[11:6], Row 2: bit[17:12], Row 3: bit[23:18]
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 3; col++) {
+      const shift = 2 * (row * 3 + col);
+      const val = (kfs >> shift) & 0x03;
+      const cell = document.createElement('div');
+      cell.className = 'kfs-cell';
+      if (val === 1) cell.className += ' v1';
+      else if (val === 2) cell.className += ' v2';
+      else if (val === 3) cell.className += ' v3';
+      cell.textContent = val;
+      cell.title = `KFS[${row}][${col}] = ${val}`;
+      container.appendChild(cell);
+    }
+  }
+}
+
+// =====================================================================
+//  KFS_PUT 2x3 矩阵渲染 (每元素 1 bit, 0~1)
+// =====================================================================
+function buildKfsPutGrid(kfs_put) {
+  const container = $('kfsPutGrid');
+  container.innerHTML = '';
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      const shift = row * 3 + col;
+      const val = (kfs_put >> shift) & 0x01;
+      const cell = document.createElement('div');
+      cell.className = 'kfs-put-cell';
+      if (val === 1) cell.className += ' on';
+      cell.textContent = val;
+      cell.title = `KFS_PUT[${row}][${col}] = ${val}`;
+      container.appendChild(cell);
+    }
+  }
+}
+
+// =====================================================================
+//  辅助
+// =====================================================================
+function clearLog() {
+  $('log').innerHTML = '';
+  log('日志已清空', 'info');
+}
+
+// 页面卸载时断开串口
+window.addEventListener('beforeunload', () => {
+  if (port) {
+    keepReading = false;
+    port.close().catch(() => {});
+  }
+});
+
+// 初始化 KFS 网格（空状态）
+buildKfsGrid(0);
+buildKfsPutGrid(0);
+
+// 检查 Web Serial API 支持
+if (!('serial' in navigator)) {
+  log('⚠ 当前浏览器不支持 Web Serial API。请使用 Chrome/Edge 浏览器。', 'err');
+  $('btnConnect').disabled = true;
+  $('btnConnect').textContent = '🚫 浏览器不支持';
+} else {
+  log('✓ Web Serial API 可用。点击"连接串口"开始接收数据。', 'ok');
+}
+</script>
+</body>
+</html>
