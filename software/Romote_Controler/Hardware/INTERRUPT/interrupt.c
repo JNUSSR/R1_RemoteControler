@@ -46,7 +46,7 @@ mavlink_message_t msg;
 uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
                               int16_t encoder_val[4],
                               int16_t move_val[4],
-                              uint8_t act_val,
+                              uint8_t *act_val,
                               uint8_t kfs_val[4][3],
                               uint8_t kfs_put_val[2][3])
 {
@@ -76,7 +76,16 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
             }
         }
 
-        /* ---- 3. MAVLink 打包 ---- */
+        /* ---- 3. 处理 act 动作指令 ----
+         * act 编码 0xXY: X = 动作ID(1~6), Y = 状态(1=松开, 2=按下)
+         * 动作1~3 有按下/松开两个状态：按下期间持续发送，松开后清零
+         * 动作4~6 仅按下单次触发：发送后立即清零
+         */
+        uint8_t act_send = *act_val;
+        uint8_t action_id  = (act_send >> 4) & 0x0F;
+        uint8_t action_state = act_send & 0x0F;
+
+        /* ---- 4. MAVLink 打包 ---- */
         mavlink_msg_remote_control_state_pack(
             MAVLINK_SYSTEM_ID,
             MAVLINK_COMPONENT_ID,
@@ -84,15 +93,27 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
             mode_val,
             encoder_val[0], encoder_val[1], encoder_val[2], encoder_val[3],
             move_val[0],    move_val[1],    move_val[2],    move_val[3],
-            act_val,
+            act_send,
             kfs_packed,
             kfs_put_packed);
 
-        /* ---- 4. 转为发送缓冲区并通过 DMA 发出 ---- */
-        /* 必须用 static，DMA 非阻塞发送期间缓冲区必须保持有效 */
-
+        /* ---- 5. 转为发送缓冲区并通过 DMA 发出 ---- */
         uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
         HAL_UART_Transmit_DMA(&huart6, buf, len);
+
+        /* ---- 6. 发送成功后智能清零 act ----
+         * 动作1~3 按下态：不清零，持续发送直到松开
+         * 动作1~3 松开态：清零
+         * 动作4~6 按下态：清零（单次触发）
+         */
+        if (action_id >= 1 && action_id <= 3 && action_state == 2)
+        {
+            /* 按下不松开，保持 act 值持续上报 */
+        }
+        else
+        {
+            *act_val = 0x00;
+        }
 
         return 1;
     }
@@ -141,9 +162,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         /* mode[0] 拨下时发送遥控器状态 */
         if(mode[0] == 0)
         {
-            if(MAVLink_Pack_And_Send(mode_packed, encoder, move, act, kfs, kfs_put))
+            if(MAVLink_Pack_And_Send(mode_packed, encoder, move, &act, kfs, kfs_put))
             {
-                act = 0X00;
+                /* act 由 MAVLink_Pack_And_Send 内部智能清零，
+                   kfs/kfs_put 每次发送成功后清零 */
                 memset(kfs, 0, sizeof(kfs));
                 memset(kfs_put, 0, sizeof(kfs_put));
             }

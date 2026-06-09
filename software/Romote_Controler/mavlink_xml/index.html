@@ -206,7 +206,9 @@
   <!-- 动作 -->
   <div class="panel">
     <h2>⚡ 动作 ACT</h2>
-    <div class="act-display" id="actVal">0x00</div>
+    <div class="act-display" id="actVal">--</div>
+    <div style="text-align:center;margin-top:4px;font-size:0.75rem;color:var(--text-secondary);" id="actDetail"></div>
+    <div style="text-align:center;margin-top:2px;font-size:0.65rem;font-family:monospace;color:var(--text-secondary);" id="actRaw"></div>
   </div>
 
   <!-- 统计 -->
@@ -619,8 +621,20 @@ function handleRemoteControlState(frame, payloadStart, len) {
   }
   $('modeRaw').textContent = '0x' + mode.toString(16).padStart(2, '0').toUpperCase();
 
-  // Act
-  $('actVal').textContent = '0x' + act.toString(16).padStart(2, '0').toUpperCase();
+  // Act 解码: 0xXY → X=动作ID(1~6), Y=状态(1=松开,2=按下)
+  const actionId  = (act >> 4) & 0x0F;
+  const actionSt  = act & 0x0F;
+  const actionNames = ['', '动作1', '动作2', '动作3', '动作4', '动作5', '动作6'];
+  if (act === 0) {
+    $('actVal').textContent = '--';
+    $('actDetail').textContent = '无动作';
+    $('actRaw').textContent = '';
+  } else {
+    const stText = actionSt === 2 ? '按下' : (actionSt === 1 ? '松开' : '?');
+    $('actVal').textContent = actionNames[actionId] || ('动作' + actionId);
+    $('actDetail').textContent = stText;
+    $('actRaw').textContent = '0x' + act.toString(16).padStart(2, '0').toUpperCase();
+  }
 
   // Encoders
   const encoderMax = 2048; // 假设最大范围用于进度条
