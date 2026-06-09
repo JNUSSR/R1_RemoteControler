@@ -55,26 +55,28 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
         (huart6.gState == HAL_UART_STATE_READY))
     {
         /* ---- 1. 将 kfs[4][3] 打包为 uint32_t ----
-         * 屏幕上报: 1=空, 2=R1, 3=R2, 4=假 → 减1后存入 0,1,2,3 (各2 bit) */
+         * 屏幕上报: 0=未更新, 1=空, 2=R1, 3=R2, 4=假
+         * val>0 时才减1, 避免 val=0 时 uint8_t 下溢 (0-1=255) */
         uint32_t kfs_packed = 0;
         for (uint8_t i = 0; i < 4; i++)
         {
             for (uint8_t j = 0; j < 3; j++)
             {
-                /* kfs[i][j] 放到 bit[2*(i*3+j)+1 : 2*(i*3+j)] */
-                kfs_packed |= ((uint32_t)((kfs_val[i][j] - 1) & 0x03)) << (2 * (i * 3 + j));
+                uint8_t v = kfs_val[i][j];
+                kfs_packed |= ((uint32_t)(v ? ((v - 1) & 0x03) : 0)) << (2 * (i * 3 + j));
             }
         }
 
         /* ---- 2. 将 kfs_put[2][3] 打包为 uint8_t ----
-         * 屏幕上报: 1=不放, 2=放 → 减1后存入 0,1 (各1 bit) */
+         * 屏幕上报: 0=未更新, 1=不放, 2=放
+         * val>0 时才减1, 避免 val=0 时 uint8_t 下溢 */
         uint8_t kfs_put_packed = 0;
         for (uint8_t i = 0; i < 2; i++)
         {
             for (uint8_t j = 0; j < 3; j++)
             {
-                /* kfs_put[i][j] 放到 bit[i*3+j] */
-                kfs_put_packed |= ((uint8_t)((kfs_put_val[i][j] - 1) & 0x01)) << (i * 3 + j);
+                uint8_t v = kfs_put_val[i][j];
+                kfs_put_packed |= ((uint8_t)(v ? ((v - 1) & 0x01) : 0)) << (i * 3 + j);
             }
         }
 
