@@ -540,10 +540,9 @@ function parseMavlinkFrame(frame) {
 
   // ---- 分发消息 ----
   if (msgid === MSG_ID_REMOTE_CONTROL_STATE) {
-    if (len >= MSG_LEN_REMOTE_CONTROL_STATE) {
+    // MAVLink v2 会裁剪尾部零字节，因此 len 可变（≤23），超界字段按 0 补足
+    if (len >= 1) {
       handleRemoteControlState(frame, payloadStart, len);
-    } else {
-      if (statCrcErr <= 5) log(`REMOTE_CONTROL_STATE payload 过短: len=${len}`, 'err');
     }
   } else {
     // 只在前5个非目标消息时记录
@@ -573,17 +572,26 @@ function handleRemoteControlState(frame, payloadStart, len) {
   statRC++;
   const p = frame; // use frame directly, offset payloadStart
 
-  const readU8  = (off) => p[payloadStart + off];
+  // MAVLink v2 会裁剪 payload 末尾的零字节（_mav_trim_payload），
+  // 因此实际 len 可能 < 23。超界读取返回 0（字段值即为 0）。
+  const readU8  = (off) => (off < len) ? p[payloadStart + off] : 0;
   const readI16 = (off) => {
-    const lo = p[payloadStart + off];
-    const hi = p[payloadStart + off + 1];
-    // little-endian signed int16
-    const val = lo | (hi << 8);
-    return val > 32767 ? val - 65536 : val;
+    if (off + 1 < len) {
+      const lo = p[payloadStart + off];
+      const hi = p[payloadStart + off + 1];
+      const val = lo | (hi << 8);
+      return val > 32767 ? val - 65536 : val;
+    }
+    // 部分在界内：读低字节
+    if (off < len) return p[payloadStart + off];
+    return 0;
   };
   const readU32 = (off) => {
-    return p[payloadStart + off] | (p[payloadStart + off + 1] << 8) |
-           (p[payloadStart + off + 2] << 16) | (p[payloadStart + off + 3] << 24);
+    let val = 0;
+    for (let i = 0; i < 4 && off + i < len; i++) {
+      val |= p[payloadStart + off + i] << (i * 8);
+    }
+    return val;
   };
 
   const kfs       = readU32(0);
