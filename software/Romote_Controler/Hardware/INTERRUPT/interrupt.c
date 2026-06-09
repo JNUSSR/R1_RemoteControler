@@ -80,20 +80,31 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
             }
         }
 
-        /* ---- 3. 处理 act 动作指令 ----
-         * act 编码 0xXY: X = 动作ID(1~6), Y = 状态(1=松开, 2=按下)
-         * 动作1~3: 按下/未按下双稳态，始终不清零，松开时转为 0x00
-         * 动作4~6: 单次触发，发送后立即清零
-         */
-        uint8_t act_send = *act_val;
-        uint8_t action_id  = (act_send >> 4) & 0x0F;
-        uint8_t action_state = act_send & 0x0F;
+        /* ---- 3. 处理 act: 屏幕上报 → 位掩码累积 ----
+         * 屏幕上报 0xXY: X=动作ID(1~6), Y=1松开/2按下
+         * act_state 位掩码: bit0~2=动作1~3(双稳态), bit3~5=动作4~6(瞬时)
+         * 6 个动作独立保存，互不干扰 */
+        static uint8_t act_state = 0;
+        uint8_t raw_act = *act_val;
 
-        /* 动作1~3 松开事件：转为未按下态(0)，并持续上报 */
-        if (action_id >= 1 && action_id <= 3 && action_state == 1)
+        if (raw_act != 0)
         {
-            *act_val = 0x00;
-            act_send = 0x00;
+            uint8_t id  = (raw_act >> 4) & 0x0F;  /* 动作ID 1~6 */
+            uint8_t st  = raw_act & 0x0F;          /* 1=松开, 2=按下 */
+            uint8_t bit = id - 1;                  /* bit0~bit5 */
+
+            if (id >= 1 && id <= 3)
+            {
+                /* 动作1~3 双稳态: 按下置位, 松开清零 */
+                if (st == 2) act_state |=  (1 << bit);
+                else         act_state &= ~(1 << bit);
+            }
+            else if (id >= 4 && id <= 6)
+            {
+                /* 动作4~6 瞬时: 按下置位 */
+                act_state |= (1 << bit);
+            }
+            *act_val = 0x00;  /* 消费屏幕事件 */
         }
 
         /* ---- 4. MAVLink 打包 ---- */
@@ -104,7 +115,7 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
             mode_val,
             encoder_val[0], encoder_val[1], encoder_val[2], encoder_val[3],
             move_val[0],    move_val[1],    move_val[2],    move_val[3],
-            act_send,
+            act_state,
             kfs_packed,
             kfs_put_packed);
 
@@ -112,14 +123,8 @@ uint8_t MAVLink_Pack_And_Send(uint8_t mode_val,
         uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
         HAL_UART_Transmit_DMA(&huart6, buf, len);
 
-        /* ---- 6. 发送成功后清零 act ----
-         * 动作1~3: 不清零（按下/未按下双稳态保持）
-         * 动作4~6: 清零（单次触发）
-         */
-        if (action_id >= 4 && action_id <= 6)
-        {
-            *act_val = 0x00;
-        }
+        /* ---- 6. 瞬时动作4~6 发送后自动清零 ---- */
+        act_state &= ~0x38;  /* 清除 bit3~5 */
 
         return 1;
     }

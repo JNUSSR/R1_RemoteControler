@@ -140,11 +140,19 @@
   .encoder-bar-wrap { background:#1e3247; border-radius:4px; height:8px; margin-top:2px; overflow:hidden; }
   .encoder-bar { height:100%; background:var(--accent); border-radius:4px; transition:width 0.1s; }
   /* act */
-  .act-display {
-    font-size:2rem; font-weight:700; text-align:center;
-    padding:8px; border-radius:var(--radius);
-    background:#1e3247;
+  .act-indicator {
+    display:flex; justify-content:space-between; align-items:center;
+    padding:5px 8px; border-radius:4px;
+    background:#1e3247; font-size:0.75rem; font-weight:600;
   }
+  .act-dot {
+    width:10px; height:10px; border-radius:50%;
+    background:#3a5068; transition:background 0.1s;
+  }
+  .act-indicator.on { background:#0e2a1a; }
+  .act-indicator.on .act-dot { background:var(--success); box-shadow:0 0 6px var(--success); }
+  .act-indicator.trig { background:#2a1a0e; }
+  .act-indicator.trig .act-dot { background:var(--warn); box-shadow:0 0 6px var(--warn); }
   /* log */
   .log {
     height: 120px;
@@ -206,9 +214,15 @@
   <!-- 动作 -->
   <div class="panel">
     <h2>⚡ 动作 ACT</h2>
-    <div class="act-display" id="actVal">--</div>
-    <div style="text-align:center;margin-top:4px;font-size:0.75rem;color:var(--text-secondary);" id="actDetail"></div>
-    <div style="text-align:center;margin-top:2px;font-size:0.65rem;font-family:monospace;color:var(--text-secondary);" id="actRaw"></div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:8px;">
+      <div class="act-indicator" id="act1"><span>A1</span><span class="act-dot"></span></div>
+      <div class="act-indicator" id="act2"><span>A2</span><span class="act-dot"></span></div>
+      <div class="act-indicator" id="act3"><span>A3</span><span class="act-dot"></span></div>
+      <div class="act-indicator" id="act4"><span>A4</span><span class="act-dot"></span></div>
+      <div class="act-indicator" id="act5"><span>A5</span><span class="act-dot"></span></div>
+      <div class="act-indicator" id="act6"><span>A6</span><span class="act-dot"></span></div>
+    </div>
+    <div style="text-align:center;font-size:0.65rem;font-family:monospace;color:var(--text-secondary);" id="actRaw"></div>
   </div>
 
   <!-- 统计 -->
@@ -621,20 +635,19 @@ function handleRemoteControlState(frame, payloadStart, len) {
   }
   $('modeRaw').textContent = '0x' + mode.toString(16).padStart(2, '0').toUpperCase();
 
-  // Act 解码: 0xXY → X=动作ID(1~6), Y=状态(1=松开,2=按下)
-  const actionId  = (act >> 4) & 0x0F;
-  const actionSt  = act & 0x0F;
-  const actionNames = ['', '动作1', '动作2', '动作3', '动作4', '动作5', '动作6'];
-  if (act === 0) {
-    $('actVal').textContent = '--';
-    $('actDetail').textContent = '无动作';
-    $('actRaw').textContent = '';
-  } else {
-    const stText = actionSt === 2 ? '按下' : (actionSt === 1 ? '松开' : '?');
-    $('actVal').textContent = actionNames[actionId] || ('动作' + actionId);
-    $('actDetail').textContent = stText;
-    $('actRaw').textContent = '0x' + act.toString(16).padStart(2, '0').toUpperCase();
+  // Act 位掩码解码: bit0~2=动作1~3, bit3~5=动作4~6
+  for (let i = 0; i < 6; i++) {
+    const on = (act >> i) & 1;
+    const el = $(`act${i + 1}`);
+    el.className = 'act-indicator';
+    if (on) {
+      el.className += (i < 3) ? ' on' : ' trig';  // A1~A3 绿色, A4~A6 橙色
+      el.querySelector('.act-dot').title = (i < 3) ? '按下' : '触发';
+    } else {
+      el.querySelector('.act-dot').title = (i < 3) ? '释放' : '空闲';
+    }
   }
+  $('actRaw').textContent = '0x' + act.toString(16).padStart(2, '0').toUpperCase();
 
   // Encoders
   const encoderMax = 2048; // 假设最大范围用于进度条
